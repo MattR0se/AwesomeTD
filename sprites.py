@@ -43,7 +43,7 @@ module_dict = sys.modules[__name__].__dict__
 
 def load_images():
     images = {
-            'background1': pg.image.load('assets/level1.png').convert(),
+            'title_screen': pg.image.load('assets/title_screen.png').convert_alpha(),
             'tower1': pg.image.load('assets/single_images/towerDefense_tile249.png').convert_alpha(),
             'tower2': pg.image.load('assets/single_images/towerDefense_tile250.png').convert_alpha(),
             'towerbase1': pg.image.load('assets/single_images/towerDefense_tile180.png').convert_alpha(),
@@ -274,7 +274,7 @@ class Bullet(pg.sprite.Sprite):
         self.acc.from_polar((1, angle))
         self.vel = vec()
         self.friction = 0.99
-        self.speed = 200
+        self.speed = 300
         
         self.damage = 1
     

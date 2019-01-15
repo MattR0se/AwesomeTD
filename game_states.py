@@ -103,6 +103,11 @@ class Ingame(State):
         self.next = 'Game_lost'
     
     
+    def startup(self):
+        super().startup()
+        self.game.elapsed_seconds = 0
+    
+    
     def spawn_waves(self, game, dt):
         if game.elapsed_seconds >= st.waves[game.current_wave]['starting_time']:
             game.wave_spawner.spawn_wave(game.current_wave, dt)
@@ -257,6 +262,7 @@ class Ingame(State):
         screen.blit(map_surf, (st.DISPLAY_W - map_w - 10, 10))
         
     
+    
 class Game_lost(State):
     def __init__(self, game):
         super().__init__(game)
@@ -289,26 +295,83 @@ class Game_lost(State):
         super().cleanup()
         pg.mouse.set_visible(False)
         self.game.start()
+        
+        
+        
+class Start_screen(State):
+    def __init__(self, game):
+        super().__init__(game)
+        self.next = 'Ingame'
+        pg.time.wait(500)
+        pg.event.wait()      
+        self.options = ['New Game',
+                   'Options',
+                   'Exit']     
+        self.options_pos = 0
+        
+        self.font = pg.font.SysFont('Arial', 40)
+        self.font_bold = pg.font.SysFont('Arial', 52, bold=True)
+    
+    
+    def update(self, dt):
+        key = self.game.key_pressed
+        if key == pg.K_s:
+            self.options_pos = (self.options_pos + 1) % len(self.options)
+        elif key == pg.K_w:
+           self.options_pos = (self.options_pos - 1) % len(self.options)
+        elif key == pg.K_RETURN:
+            self.execute_option()
 
+    
+    def execute_option(self):
+        if self.options_pos == 0:
+            self.next = 'Ingame'
+            pg.mouse.set_visible(False)
+            self.done = True
+        elif self.options_pos == 2:
+            self.game.running = False
         
+    
+    def draw(self, screen):
+        screen.blit(self.game.images['title_screen'], (0, 0)) 
         
+        m_pos = pg.mouse.get_pos()
+            
+        for i in range(len(self.options)):
+            if self.options_pos == i:
+                text_surface = self.font_bold.render(self.options[i], False, st.BLACK)
+            else:
+                text_surface = self.font.render(self.options[i], False, st.BLACK)
+            text_rect = text_surface.get_rect()
+            height = st.DISPLAY_H // 18 * (i + 7)
+            text_rect.center = ((st.DISPLAY_W // 2, height))
+            screen.blit(text_surface, text_rect)
+            
+            if text_rect.collidepoint(m_pos):
+                self.options_pos = i
+                if self.game.mouse_pressed[0]:
+                    self.execute_option()
+        
+
 
 class Game:
     def __init__(self):
         pg.init()
         self.clock = pg.time.Clock()
-        pg.mouse.set_visible(False)
-        self.screen = pg.display.set_mode((st.DISPLAY_W, st.DISPLAY_H))
+        pg.mouse.set_visible(True)
+        self.display = pg.display.set_mode((st.DISPLAY_W, st.DISPLAY_H))
+        self.screen = pg.Surface((st.DISPLAY_W, st.DISPLAY_H))
         self.screen_rect = self.screen.get_rect()                      
         self.event = None
         self.font = pg.font.SysFont('Arial', 24)
         # MEMO: make a 'fonts' dict with different fonts
         
         self.states_dict = {
+                'Start_screen': Start_screen(self),
                 'Ingame': Ingame(self),
                 'Game_lost': Game_lost(self)
                 }
-        self.state = self.states_dict['Ingame']
+        self.state = self.states_dict['Start_screen']
         
         self.images = spr.load_images()
         
@@ -343,10 +406,9 @@ class Game:
         self.game_lost = False
         self.money = st.STARTING_MONEY
         self.lives = st.STARTING_LIVES
-        self.elapsed_seconds = 0
         self.current_wave = 0
         self.wave_spawner = Wave(self)
-              
+        self.elapsed_seconds = 0
         self.load_map('level1')      
         self.map_rect = self.bg_image.get_rect()
         self.map_rect.topleft = (0, 0)
@@ -404,7 +466,14 @@ class Game:
     
     def draw(self):
         self.screen.fill(st.BLACK)
-        self.state.draw(self.screen)              
+        self.state.draw(self.screen)
+        w, h = self.screen.get_size()
+        if st.CAMERA_ZOOM == 1:
+            pg.transform.scale(self.screen, (w, h), self.display)
+        else:
+            s = pg.transform.scale(self.screen, (int(w * st.CAMERA_ZOOM),
+                                                 int(h * st.CAMERA_ZOOM)))
+            self.display.blit(s, (0, 0))              
         pg.display.update()
     
     
