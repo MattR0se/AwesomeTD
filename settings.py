@@ -7,13 +7,15 @@ DISPLAY_W = 1280
 DISPLAY_H = 960
 FPS = 60
 GAME_SPEED = 1
+FONT = 'Arial'
 
 # gameplay settings
 CAMERA_SPEED = 800
+CAMERA_ZOOM = 1
 TILESIZE = 64
 
-STARTING_MONEY = 6000
-STARTING_LIVES = 40
+STARTING_MONEY = 1400
+STARTING_LIVES = 20
 
 # colors
 BLACK = (0, 0, 0)
@@ -46,20 +48,20 @@ mobs = {
                 'hitbox_size': (20, 20),
                 'image': 'mob2',
                 'hp': 6,
-                'speed': 18,
+                'speed': 28,
                 'reward': 20
                 },
         'heavy': {
                 'hitbox_size': (20, 20),
                 'image': 'mob3',
                 'hp': 40,
-                'speed': 8,
+                'speed': 6,
                 'reward': 30
                 },
         'boss': {
                 'hitbox_size': (80, 80),
                 'image': 'mob8',
-                'hp': 200,
+                'hp': 260,
                 'speed': 10,
                 'reward': 500
                 },
@@ -68,7 +70,7 @@ mobs = {
 waves = [{
             'type': 'standard',
             'number': 10,
-            'starting_time': 5
+            'starting_time': 10
         },
         {
             'type': 'standard',
