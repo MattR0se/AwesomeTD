@@ -120,7 +120,7 @@ class Ingame(State):
         self.game.all_sprites.update(dt)
         
         # place turret
-        m_pos = self.game.camera.apply_mouse(pg.mouse.get_pos())
+        m_pos = self.game.camera.apply_mouse(self.game.mouse_pos)
         if self.game.mouse_pressed[0]:
             # prevent placement on a road
             road_hits = [x.rect.collidepoint(m_pos) for x in self.game.roads]
@@ -202,10 +202,9 @@ class Ingame(State):
         pg.draw.ellipse(radius_surf, (20, 20, 20), radius_surf.get_rect())     
         sample_shooter = self.game.images[st.shooters[self.game.selected_shooter]['image']]
         size = sample_shooter.get_rect().size
-        m_pos = vec(pg.mouse.get_pos())
-        p = (m_pos.x - r, m_pos.y - r)
+        p = (self.game.mouse_pos.x - r, self.game.mouse_pos.y - r)
         screen.blit(radius_surf, p, special_flags=pg.BLEND_RGBA_SUB)       
-        screen.blit(sample_shooter, m_pos - vec(size) / 2)
+        screen.blit(sample_shooter, self.game.mouse_pos - vec(size) / 2)
         
         self.draw_minimap(screen)
                     
@@ -334,8 +333,6 @@ class Start_screen(State):
     
     def draw(self, screen):
         screen.blit(self.game.images['title_screen'], (0, 0)) 
-        
-        m_pos = pg.mouse.get_pos()
             
         for i in range(len(self.options)):
             if self.options_pos == i:
@@ -347,7 +344,7 @@ class Start_screen(State):
             text_rect.center = ((st.DISPLAY_W // 2, height))
             screen.blit(text_surface, text_rect)
             
-            if text_rect.collidepoint(m_pos):
+            if text_rect.collidepoint(self.game.mouse_pos):
                 self.options_pos = i
                 if self.game.mouse_pressed[0]:
                     self.execute_option()
@@ -362,7 +359,7 @@ class Game:
         self.display = pg.display.set_mode((st.DISPLAY_W, st.DISPLAY_H))
         self.screen = pg.Surface((st.DISPLAY_W, st.DISPLAY_H))
         self.screen_rect = self.screen.get_rect()                      
-        self.event = None
+        self.event_list = set()
         self.font = pg.font.SysFont('Arial', 24)
         # MEMO: make a 'fonts' dict with different fonts
         
@@ -437,12 +434,13 @@ class Game:
         
         
     def events(self):
-        self.event = None
+        self.event_list = set()
         self.mouse_pressed = [0, 0, 0, 0, 0]
         self.mouse_released = [0, 0, 0, 0, 0]
+        self.mouse_pos = vec(pg.mouse.get_pos())
         self.key_pressed = None
         for event in pg.event.get():
-            self.event = event
+            self.event_list.add(event)
             if event.type == pg.QUIT:
                 self.running = False
             elif event.type == pg.MOUSEBUTTONDOWN:
@@ -451,6 +449,8 @@ class Game:
                 self.mouse_released[event.button - 1] = 1
             elif event.type == pg.KEYDOWN:
                 self.key_pressed = event.key
+        
+        print(self.event_list)
                 
     
     def switch_states(self):
@@ -461,6 +461,8 @@ class Game:
             
     
     def update(self, dt):
+        #if self.key_pressed ==
+        
         self.state.update(dt)
     
     
