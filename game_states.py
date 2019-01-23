@@ -43,10 +43,18 @@ class Camera(object):
         
     
     def update(self, dt):
-        keys = pg.key.get_pressed()
-        self.move.x = keys[pg.K_a] - keys[pg.K_d]
-        self.move.y = keys[pg.K_w] - keys[pg.K_s]
-        spr.limit(self.move, 1)
+        if pg.mouse.get_pressed()[1]:
+            self.move *= 0
+            for event in self.game.event_list:
+                if event.type == pg.MOUSEMOTION:
+                    self.move.x = event.rel[0]
+                    self.move.y = event.rel[1]
+                    self.move *= st.CAMERA_SPEED / 10000
+        else:
+            keys = pg.key.get_pressed()
+            self.move.x = keys[pg.K_a] - keys[pg.K_d]
+            self.move.y = keys[pg.K_w] - keys[pg.K_s]
+            spr.limit(self.move, 1)
         
         self.offset += (int(self.move.x * self.speed * dt), 
                         int(self.move.y * self.speed * dt))
@@ -327,6 +335,9 @@ class Start_screen(State):
             self.next = 'Ingame'
             pg.mouse.set_visible(False)
             self.done = True
+        elif self.options_pos == 1:
+            self.next = 'Options'
+            self.done = True
         elif self.options_pos == 2:
             self.game.running = False
         
@@ -348,6 +359,73 @@ class Start_screen(State):
                 self.options_pos = i
                 if self.game.mouse_pressed[0]:
                     self.execute_option()
+
+
+
+class Options(State):
+    def __init__(self, game):
+        super().__init__(game)
+        self.next = 'Start_screen'    
+        self.options = [
+                        'Display mode: Windowed',
+                        'Always show health bar: Yes',
+                        f'Scroll speed: {st.CAMERA_SPEED}',
+                        '',
+                        'Save changes',
+                        'Back to title screen'
+                        ]     
+        self.options_pos = 0
+        
+        self.font = pg.font.SysFont('Arial', 40)
+        self.font_bold = pg.font.SysFont('Arial', 52, bold=True)
+    
+    
+    def update(self, dt):
+        key = self.game.key_pressed
+        if key == pg.K_s:
+            self.options_pos = (self.options_pos + 1) % len(self.options)
+        elif key == pg.K_w:
+           self.options_pos = (self.options_pos - 1) % len(self.options)
+        elif key == pg.K_RETURN:
+            self.execute_option()
+
+    
+    def execute_option(self):
+        if self.options_pos == 0:
+            self.game.toggle_fullscreen()
+            if self.game.display.get_flags() & pg.FULLSCREEN:
+                self.options[0] = 'Display mode: Full screen'
+            else:
+                self.options[0] = 'Display mode: Windowed'
+        
+        elif self.options_pos == 1:
+            st.ALWAYS_SHOW_LIFEBARS = not st.ALWAYS_SHOW_LIFEBARS
+            if st.ALWAYS_SHOW_LIFEBARS:
+                self.options[1] = 'Always show health bar: Yes'
+            else:
+                self.options[1] = 'Always show health bar: No'
+        
+        elif self.options_pos == 5:
+            self.done = True
+        
+    
+    def draw(self, screen):
+        screen.fill(st.BLACK)
+            
+        for i in range(len(self.options)):
+            if self.options_pos == i:
+                text_surface = self.font_bold.render(self.options[i], False, st.WHITE)
+            else:
+                text_surface = self.font.render(self.options[i], False, st.WHITE)
+            text_rect = text_surface.get_rect()
+            height = st.DISPLAY_H // 18 * (i + 7)
+            text_rect.center = ((st.DISPLAY_W // 2, height))
+            screen.blit(text_surface, text_rect)
+            
+            if text_rect.collidepoint(self.game.mouse_pos):
+                self.options_pos = i
+                if self.game.mouse_pressed[0]:
+                    self.execute_option()
         
 
 
@@ -359,12 +437,13 @@ class Game:
         self.display = pg.display.set_mode((st.DISPLAY_W, st.DISPLAY_H))
         self.screen = pg.Surface((st.DISPLAY_W, st.DISPLAY_H))
         self.screen_rect = self.screen.get_rect()                      
-        self.event_list = set()
+        self.event_list = []
         self.font = pg.font.SysFont('Arial', 24)
         # MEMO: make a 'fonts' dict with different fonts
         
         self.states_dict = {
                 'Start_screen': Start_screen(self),
+                'Options': Options(self),
                 'Ingame': Ingame(self),
                 'Game_lost': Game_lost(self)
                 }
@@ -434,13 +513,12 @@ class Game:
         
         
     def events(self):
-        self.event_list = set()
         self.mouse_pressed = [0, 0, 0, 0, 0]
         self.mouse_released = [0, 0, 0, 0, 0]
         self.mouse_pos = vec(pg.mouse.get_pos())
         self.key_pressed = None
-        for event in pg.event.get():
-            self.event_list.add(event)
+        self.event_list = pg.event.get()
+        for event in self.event_list:
             if event.type == pg.QUIT:
                 self.running = False
             elif event.type == pg.MOUSEBUTTONDOWN:
@@ -449,8 +527,6 @@ class Game:
                 self.mouse_released[event.button - 1] = 1
             elif event.type == pg.KEYDOWN:
                 self.key_pressed = event.key
-        
-        print(self.event_list)
                 
     
     def switch_states(self):
@@ -460,9 +536,16 @@ class Game:
             self.state.startup()
             
     
-    def update(self, dt):
-        #if self.key_pressed ==
-        
+    def toggle_fullscreen(self):
+        if self.display.get_flags() & pg.FULLSCREEN:
+            pg.display.set_mode(st.DISPLAY_SIZE)
+        else:
+            pg.display.set_mode(st.DISPLAY_SIZE, pg.FULLSCREEN)
+            
+    
+    def update(self, dt):  
+        if self.key_pressed == pg.K_F4:
+            self.toggle_fullscreen()
         self.state.update(dt)
     
     

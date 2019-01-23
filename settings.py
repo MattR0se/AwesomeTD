@@ -5,6 +5,7 @@ import itertools
 # display settings
 DISPLAY_W = 1280
 DISPLAY_H = 960
+DISPLAY_SIZE = (DISPLAY_W, DISPLAY_H)
 FPS = 60
 GAME_SPEED = 1
 FONT = 'Arial'
@@ -13,6 +14,8 @@ FONT = 'Arial'
 CAMERA_SPEED = 800
 CAMERA_ZOOM = 1
 TILESIZE = 64
+
+ALWAYS_SHOW_LIFEBARS = True
 
 STARTING_MONEY = 1400
 STARTING_LIVES = 20
@@ -70,17 +73,17 @@ mobs = {
 waves = [{
             'type': 'standard',
             'number': 10,
-            'starting_time': 10
+            'starting_time': 1
         },
         {
             'type': 'standard',
             'number': 30,
-            'starting_time': 25
+            'starting_time': 15
         },
         {
             'type': 'fast',
-            'number': 20,
-            'starting_time': 45
+            'number': 25,
+            'starting_time': 30
         },
         {
             'type': 'heavy',
@@ -90,12 +93,12 @@ waves = [{
         {
             'type': 'standard',
             'number': 40,
-            'starting_time': 80
+            'starting_time': 90
         },
         {
             'type': 'boss',
             'number': 1,
-            'starting_time': 100
+            'starting_time': 120
         },
         {
             'starting_time': 2000        
@@ -109,6 +112,7 @@ shooters = {
                 'cooldown': 0.2,
                 'perception_radius': 200,
                 'projectile': 'Bullet',
+                'damage': 1,
                 'price': 200,
                 'refund': 80
                 },
@@ -119,6 +123,7 @@ shooters = {
                 'cooldown': 0.04,
                 'perception_radius': 180,
                 'projectile': 'Bullet',
+                'damage': 0.5,
                 'price': 800,
                 'refund': 300
                 }
