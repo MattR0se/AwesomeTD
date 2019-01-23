@@ -94,7 +94,7 @@ class Mob(pg.sprite.Sprite):
         self.hitbox.center = self.rect.center
         self.path = path
         self.current_target = 0
-        self.target = vec(self.path[self.current_target])
+        self.target = self.path[self.current_target]
         self.speed = st.mobs[self.type]['speed']
         self.friction = 0.9
         
@@ -104,7 +104,7 @@ class Mob(pg.sprite.Sprite):
         
     
     def update(self, dt):
-        self.acc += self.arrive(self.target)
+        self.acc += self.arrive(self.target.position)
         self.acc += self.separation()
         self.vel += self.acc * self.speed * dt
         self.acc *= 0
@@ -118,11 +118,14 @@ class Mob(pg.sprite.Sprite):
             self.game.money += self.reward
             self.kill()
         
-        d = self.target - self.pos
+        d = self.target.position - self.pos
         
         if d.length() < self.speed:
             self.current_target += 1
-            self.target = self.path[self.current_target]
+            try:
+                self.target = self.path[self.current_target]
+            except:
+                self.kill()
         
         # calculate rotation
         angle = self.vel.angle_to(RIGHT)
@@ -361,6 +364,6 @@ class Road(object):
     '''
     def __init__(self, x, y, width, height):
         self.rect = pg.Rect(x, y, width, height)
-        
+
         
         

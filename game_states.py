@@ -5,6 +5,7 @@ from pytmx.util_pygame import load_pygame
 
 import sprites as spr
 import settings as st
+import maps as mp
 
 vec = pg.math.Vector2
 
@@ -20,13 +21,12 @@ class Wave(object):
     
     
     def spawn_wave(self, n, dt):
-        pos = self.game.spawn_pos + vec(0, randint(-1, 1))
+        pos = self.game.start_node.position + vec(0, randint(-1, 1))
         self.timer += dt
         
         if not self.done and self.timer > self.delay:
             self.timer = 0
-            spr.Mob(self.game, pos, choice([self.game.path1, self.game.path2]), 
-                st.waves[n]['type'])
+            spr.Mob(self.game, pos, choice(self.game.paths), st.waves[n]['type'])
             self.counter += 1
             if self.counter >= st.waves[n]['number']:
                 self.counter = 0
@@ -231,7 +231,7 @@ class Ingame(State):
                 pg.draw.line(screen, st.WHITE, start, end, 2)
             
                 if len(m.path) > 1:
-                    path_ = list(map(lambda x: camera.apply_pos(x), m.path))
+                    path_ = list(map(lambda x: camera.apply_pos(x.position), m.path))
                     pg.draw.lines(screen, st.WHITE, False, path_)
                      
             # draw rects
@@ -463,21 +463,6 @@ class Game:
         self.mobs = pg.sprite.Group()
         self.shooters = pg.sprite.Group()
         self.bullets = pg.sprite.Group()
-        self.roads = []
-        
-        self.path1 = [vec(4, 15),  vec(4, 4),   vec(14, 4),
-                      vec(14, 9),  vec(24, 9),  vec(24, 5),
-                      vec(33, 5),  vec(33, 11), vec(35, 11),
-                      vec(35, 15), vec(41, 15)]
-        for v in self.path1:
-            v *= st.TILESIZE 
-            v += vec(st.TILESIZE * 0.5, st.TILESIZE * 0.5)
-        self.path2 = [vec(4, 15),  vec(4, 25),  vec(12, 25),
-                      vec(12, 20), vec(25, 20), vec(25, 25),
-                      vec(35, 25), vec(35, 15), vec(41, 15)]
-        for v in self.path2:
-            v *= st.TILESIZE
-            v += vec(st.TILESIZE * 0.5, st.TILESIZE * 0.5)
         
         self.game_lost = False
         self.money = st.STARTING_MONEY
@@ -485,14 +470,31 @@ class Game:
         self.current_wave = 0
         self.wave_spawner = Wave(self)
         self.elapsed_seconds = 0
-        self.load_map('level1')      
+        # load objects from tmx data
+        self.bg_image, map_objects = mp.load_map('level2')
+        self.roads = []
+        self.nodes = []
+        self.walls = []
+        for obj in map_objects:
+            if obj.name == 'Road':
+                self.roads.append(spr.Road(obj.x, obj.y, obj.width, obj.height))
+            elif obj.name == 'node':
+                self.nodes.append(mp.Node(self, (obj.x, obj.y), (obj.width, obj.height)))
+            elif obj.name == 'Wall':
+                self.walls.append(mp.Wall(self, (obj.x, obj.y), (obj.width, obj.height)))
+        
         self.map_rect = self.bg_image.get_rect()
         self.map_rect.topleft = (0, 0)
-        self.spawn_pos = vec(-2 * st.TILESIZE, 15 * st.TILESIZE)
-        self.spawn_pos += vec(st.TILESIZE * 0.5, st.TILESIZE * 0.5)
-        
-        self.selected_shooter = next(st.shooter_it)
-        
+        self.start_node = mp.Node(self, (-2 * st.TILESIZE, self.map_rect.h // 2), (64, 64))
+        self.end_node = mp.Node(self, (41 * st.TILESIZE, self.map_rect.h // 2), (64, 64))
+        self.nodes.append(self.start_node)
+        self.nodes.append(self.end_node)
+        for node in self.nodes:
+            node.find_neighbors()
+        # find paths along the nodes
+        self.paths = mp.find_paths(self.start_node, self.end_node)
+              
+        self.selected_shooter = next(st.shooter_it)     
         self.camera = Camera(self)
 
 
