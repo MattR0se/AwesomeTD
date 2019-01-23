@@ -37,26 +37,36 @@ def scale_image(image, scale):
     return pg.transform.scale(image, (rect.w * scale, rect.h * scale))
 
 
+def load_image(path, scale=1, alpha=True):
+    image = pg.image.load(path)
+    if alpha:
+        image = image.convert_alpha()
+    if scale != 1:
+        image = scale_image(image, scale)
+    return image
+
+
 # ----------- sprites ---------------------------------------------------------
 module_dict = sys.modules[__name__].__dict__
 
 
 def load_images():
     images = {
-            'title_screen': pg.image.load('assets/title_screen.png').convert_alpha(),
-            'tower1': pg.image.load('assets/single_images/towerDefense_tile249.png').convert_alpha(),
-            'tower2': pg.image.load('assets/single_images/towerDefense_tile250.png').convert_alpha(),
-            'towerbase1': pg.image.load('assets/single_images/towerDefense_tile180.png').convert_alpha(),
-            'towerbase2': pg.image.load('assets/single_images/towerDefense_tile181.png').convert_alpha(),
-            'mob1': pg.image.load('assets/single_images/towerDefense_tile245.png').convert_alpha(),
-            'mob2': pg.image.load('assets/single_images/towerDefense_tile246.png').convert_alpha(),
-            'mob3': pg.image.load('assets/single_images/towerDefense_tile247.png').convert_alpha(),
-            'mob4': pg.image.load('assets/single_images/towerDefense_tile248.png').convert_alpha(),
-            'mob5': pg.image.load('assets/single_images/towerDefense_tile270.png').convert_alpha(),
-            'mob6': pg.image.load('assets/single_images/towerDefense_tile271.png').convert_alpha(),
-            'mob7': pg.image.load('assets/single_images/towerDefense_tile268.png').convert_alpha(),
-            'mob8': scale_image(pg.image.load('assets/single_images/towerDefense_tile269.png').convert_alpha(), 2),
-            'bullet1': pg.image.load('assets/single_images/towerDefense_tile272.png').convert_alpha()
+            'title_screen': load_image('assets/title_screen.png'),
+            'tower1': load_image('assets/single_images/towerDefense_tile249.png'),
+            'tower2': load_image('assets/single_images/towerDefense_tile250.png'),
+            'towerbase1': load_image('assets/single_images/towerDefense_tile180.png'),
+            'towerbase2': load_image('assets/single_images/towerDefense_tile181.png'),
+            'mob1': load_image('assets/single_images/towerDefense_tile245.png'),
+            'mob2': load_image('assets/single_images/towerDefense_tile246.png'),
+            'mob3': load_image('assets/single_images/towerDefense_tile247.png'),
+            'mob4': load_image('assets/single_images/towerDefense_tile248.png'),
+            'mob5': load_image('assets/single_images/towerDefense_tile270.png'),
+            'mob6': load_image('assets/single_images/towerDefense_tile271.png'),
+            'mob7': load_image('assets/single_images/towerDefense_tile268.png'),
+            'mob8': load_image('assets/single_images/towerDefense_tile1001.png', scale=2),
+            'bullet1': load_image('assets/single_images/towerDefense_tile272.png'),
+            'flash1': load_image('assets/single_images/towerDefense_tile295.png')
             }
     
     return images
@@ -177,7 +187,7 @@ class Mob(pg.sprite.Sprite):
         screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
         
         keys = pg.key.get_pressed()
-        if keys[pg.K_LSHIFT] or keys[pg.K_CAPSLOCK]:
+        if keys[pg.K_LSHIFT] or keys[pg.K_CAPSLOCK] or st.ALWAYS_SHOW_LIFEBARS:
             pct = max(0, self.hp / self.max_hp)
             if pct > 0.5:
                 lerp_pct = remap(pct, 0.5, 1, 0, 1)
@@ -227,27 +237,40 @@ class Shooter(pg.sprite.Sprite):
                 if dist < closest:
                     closest = dist
                     self.target = s
-        
-        
+               
         # shoot at target
         if self.target:
-            target_desired = self.target.pos + self.target.vel * 30
-            self.aim = target_desired - self.pos
-            angle = self.aim.angle_to(vec(1, 0)) * -1
-            if self.timer >= self.cooldown:   
-                # shoot bullets
-                muzzle_pos = self.pos + self.aim.normalize() * 22
-                module_dict[self.projectile](self.game, muzzle_pos, angle)
-                self.timer = 0
-            
-            # image rotation
-            img_temp = self.image_original.copy()
-            img_temp = pg.transform.rotate(img_temp, angle * -1 - 90)
-            self.image = img_temp
-            self.rect = self.image.get_rect()
+            self.shoot()
 
         self.rect.center = self.pos
         self.base_rect.center = self.rect.center
+    
+    
+    def shoot(self):
+        target_desired = self.target.pos + self.target.vel * 30
+        self.aim = target_desired - self.pos
+        angle = self.aim.angle_to(vec(1, 0)) * -1
+        if self.timer >= self.cooldown:   
+            # shoot bullets
+            self.muzzle_pos = self.pos + self.aim.normalize() * 32
+            dmg = st.shooters[self.type]['damage']
+            if self.type == 'machine_gun':
+                pos1 = self.muzzle_pos + vec(-1, -8).rotate(angle)
+                pos2 = self.muzzle_pos + vec(-1, 8).rotate(angle)
+                module_dict[self.projectile](self.game, pos1, angle, dmg)
+                Muzzle_flash(self.game, pos1, angle)
+                module_dict[self.projectile](self.game, pos2, angle, dmg)
+                Muzzle_flash(self.game, pos2, angle)                
+            else:                
+                module_dict[self.projectile](self.game, self.muzzle_pos, angle, dmg)
+                Muzzle_flash(self.game, self.muzzle_pos, angle)
+            self.timer = 0
+        
+        # image rotation
+        img_temp = self.image_original.copy()
+        img_temp = pg.transform.rotate(img_temp, angle * -1 - 90)
+        self.image = img_temp
+        self.rect = self.image.get_rect()
     
     
     def draw(self, screen):
@@ -256,11 +279,13 @@ class Shooter(pg.sprite.Sprite):
                     self.game.camera.apply_pos(self.base_rect.topleft))
         # draw muzzle
         screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
+    
+
 
 
 
 class Bullet(pg.sprite.Sprite):
-    def __init__(self, game, position, angle):
+    def __init__(self, game, position, angle, damage):
         super().__init__(game.all_sprites, game.bullets)
         self.game = game
         self.image_original = self.game.images['bullet1'].copy()
@@ -276,7 +301,7 @@ class Bullet(pg.sprite.Sprite):
         self.friction = 0.99
         self.speed = 300
         
-        self.damage = 1
+        self.damage = damage
     
     
     def update(self, dt):
@@ -302,6 +327,31 @@ class Bullet(pg.sprite.Sprite):
     
     def draw(self, screen):
         screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
+
+
+
+class Muzzle_flash(pg.sprite.Sprite):
+    def __init__(self, game, position, angle):
+        super().__init__(game.all_sprites)
+        self.game = game
+        self.image = self.game.images['flash1'].copy()
+        self.image = pg.transform.rotate(self.image, angle * -1 - 90)      
+        self.rect = self.image.get_rect()
+        self.rect.center = position
+        self.alpha = 255
+        self.alpha_reduction = 3000
+    
+    
+    def update(self, dt):
+        self.alpha = max(0, self.alpha - self.alpha_reduction * dt)
+        self.image.set_alpha(self.alpha)
+        if self.alpha == 0:
+            self.kill()
+    
+    
+    def draw(self, screen):
+        screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
+        
     
     
 
