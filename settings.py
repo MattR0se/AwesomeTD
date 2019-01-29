@@ -3,22 +3,28 @@ import itertools
 
 
 # display settings
-DISPLAY_W = 1280
-DISPLAY_H = 960
-DISPLAY_SIZE = (DISPLAY_W, DISPLAY_H)
+SCREEN_W = 1280
+SCREEN_H = 960
+RESOLUTIONS = [
+        (1280, 960),
+        (1024, 768),
+        (800, 600)
+        ]
+DISPLAY_SIZE = RESOLUTIONS[0]
+DISPLAY_W = DISPLAY_SIZE[0]
+DISPLAY_H = DISPLAY_SIZE[1]
+TILESIZE = 64
 FPS = 60
 GAME_SPEED = 1
 FONT = 'Arial'
 
 # gameplay settings
+# MEMO make this a dict, these aren't constants
 CAMERA_SPEED = 800
-CAMERA_ZOOM = 1
-TILESIZE = 64
-
 ALWAYS_SHOW_LIFEBARS = True
 
 STARTING_MONEY = 1400
-STARTING_LIVES = 20
+STARTING_LIVES = 40
 
 # colors
 BLACK = (0, 0, 0)
@@ -126,6 +132,17 @@ shooters = {
                 'damage': 0.5,
                 'price': 800,
                 'refund': 300
+                },
+        'anti_air': {
+                'size': (12, 12),
+                'image': 'tower3',
+                'base_image': 'towerbase2',
+                'cooldown': 3,
+                'perception_radius': 500,
+                'projectile': 'Rocket',
+                'damage': 10,
+                'price': 100,
+                'refund': 0
                 }
         }
 
