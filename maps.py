@@ -1,8 +1,10 @@
 import pygame as pg
 from queue import Queue
 from pytmx.util_pygame import load_pygame
+from random import randint, choice
 
-#import settings as st
+import sprites as spr
+import settings as st
 
 
 vec = pg.math.Vector2
@@ -19,6 +21,7 @@ def get_path_length(path):
 
 def breadth_first_search(start, goal):
     # https://www.redblobgames.com/pathfinding/a-star/introduction.html
+    # visits all nodes and finds shortest path (path with fewest nodes)
     frontier = Queue()
     frontier.put(start)
     came_from = {}
@@ -42,6 +45,7 @@ def breadth_first_search(start, goal):
 
 
 def find_paths(start, goal):
+    # return all paths between nodes
     q = Queue()
     path = []
     paths = []
@@ -54,6 +58,7 @@ def find_paths(start, goal):
             paths.append(path)
         
         for node in last.neighbors:
+            # look at each neighbor of the current node
             if node not in path:
                 newpath = list(path)
                 newpath.append(node)
@@ -64,9 +69,11 @@ def find_paths(start, goal):
 
 def load_map(file):
         tiled_map = load_pygame('assets/{}.tmx'.format(file))
+        # create empty surface based on tile map dimensions
         bg_image = pg.Surface((tiled_map.width * tiled_map.tilewidth,
                               tiled_map.height * tiled_map.tileheight))
         map_objects = tiled_map.get_layer_by_name('objects1')
+        # iterate through each tile layer and blit the corresponding tile
         for layer in tiled_map.layers:
             if 'tiles' in layer.name:
                 for x, y, image in layer.tiles():
@@ -76,7 +83,38 @@ def load_map(file):
 
 
 
+class Wave(object):
+    '''
+    creates mobs based on the waves dictionary in settings
+    '''
+    def __init__(self, game):
+        self.game = game
+        self.done = False
+        self.counter = 0 # index of the current wave
+        self.timer = 0
+        self.delay = 0.3 # spawning frequency
+    
+    
+    def spawn_wave(self, n, dt):
+        # slight random offset
+        pos = self.game.start_node.position + vec(0, randint(-1, 1))
+        # advance the timer
+        self.timer += dt
+        
+        if not self.done and self.timer > self.delay:
+            self.timer = 0
+            spr.Mob(self.game, pos, choice(self.game.paths), st.waves[n]['type'])
+            self.counter += 1
+            if self.counter >= st.waves[n]['number']:
+                self.counter = 0
+                self.done = True
+
+
+
 class Node:
+    '''
+    this object represents a position on the map
+    '''
     def __init__(self, game, position, size):
         self.game = game
         self.rect = pg.Rect(position, size)
@@ -91,7 +129,7 @@ class Node:
     
     def find_neighbors(self):
         # cast a ray to each other node and if it doesn't intersect a wall
-        # add that node to neighbors
+        # or another node and add that node to its neighbors
         self.neighbors.clear()
         for node in self.game.nodes:
             if node != self:
@@ -110,6 +148,9 @@ class Node:
     
 
 class Wall:
+    '''
+    'Wall' is everywhere the mobs can't go through
+    '''
     def __init__(self, game, position, size):
         self.game = game
         self.rect = pg.Rect(position, size)
@@ -119,7 +160,9 @@ class Wall:
                 
 
 class Line:
-    # class that represents a line from one point to another
+    '''
+    class that represents a line from one point to another
+    '''
     def __init__(self, start, end):
         self.start = vec(start)
         self.end = vec(end)

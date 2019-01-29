@@ -1,5 +1,4 @@
 import pygame as pg
-from random import randint, choice
 from pytmx.util_pygame import load_pygame
 #import traceback
 
@@ -10,29 +9,6 @@ import maps as mp
 vec = pg.math.Vector2
 
 
-# PUT THIS ELSEWHERE?
-class Wave(object):
-    def __init__(self, game):
-        self.game = game
-        self.done = False
-        self.counter = 0
-        self.timer = 0
-        self.delay = 0.3
-    
-    
-    def spawn_wave(self, n, dt):
-        pos = self.game.start_node.position + vec(0, randint(-1, 1))
-        self.timer += dt
-        
-        if not self.done and self.timer > self.delay:
-            self.timer = 0
-            spr.Mob(self.game, pos, choice(self.game.paths), st.waves[n]['type'])
-            self.counter += 1
-            if self.counter >= st.waves[n]['number']:
-                self.counter = 0
-                self.done = True
-    
-    
 
 class Camera(object):
     def __init__(self, game):
@@ -40,17 +16,21 @@ class Camera(object):
         self.speed = st.CAMERA_SPEED
         self.offset = vec()
         self.move = vec()
+        self.zoom_level = 1
         
     
     def update(self, dt):
+        self.zoom()
         if pg.mouse.get_pressed()[1]:
+            # Move camera with the mouse
             self.move *= 0
             for event in self.game.event_list:
                 if event.type == pg.MOUSEMOTION:
                     self.move.x = event.rel[0]
                     self.move.y = event.rel[1]
-                    self.move *= st.CAMERA_SPEED / 10000
+                    self.move *= st.CAMERA_SPEED / 10000.0
         else:
+            # move camera with the WASD keys
             keys = pg.key.get_pressed()
             self.move.x = keys[pg.K_a] - keys[pg.K_d]
             self.move.y = keys[pg.K_w] - keys[pg.K_s]
@@ -79,6 +59,12 @@ class Camera(object):
 
     def apply_rect(self, rect):
         return pg.Rect(rect.topleft + self.offset, rect.size)
+    
+    def zoom(self):
+        if self.game.mouse_pressed[3]:
+            self.zoom_level += 0.1
+        elif self.game.mouse_pressed[4]:
+            self.zoom_level -= 0.1
     
 
 
@@ -113,7 +99,7 @@ class Ingame(State):
     
     def startup(self):
         super().startup()
-        self.game.elapsed_seconds = 0
+        #self.game.elapsed_seconds = 0
     
     
     def spawn_waves(self, game, dt):
@@ -125,9 +111,10 @@ class Ingame(State):
     
     
     def update(self, dt):
+        self.game.elapsed_seconds += dt       
         self.game.all_sprites.update(dt)
         
-        # place turret
+        # place the selected turret
         m_pos = self.game.camera.apply_mouse(self.game.mouse_pos)
         if self.game.mouse_pressed[0]:
             # prevent placement on a road
@@ -159,6 +146,11 @@ class Ingame(State):
             self.game.selected_shooter = next(st.shooter_it)
         
         if self.game.lives <= 0:
+            self.done = True
+            
+        # Pause menu
+        if self.game.key_pressed == pg.K_ESCAPE:
+            self.next = 'Pause_menu'
             self.done = True
         
         # DEBUG STUFF
@@ -237,10 +229,17 @@ class Ingame(State):
             # draw rects
             for sprite in self.game.all_sprites:
                 if hasattr(sprite, 'hitbox'):
-                    pg.draw.rect(screen, st.RED, self.game.camera.apply_rect(sprite.hitbox), 1)
+                    pg.draw.rect(screen, st.RED, camera.apply_rect(sprite.hitbox), 1)
             
             for road in self.game.roads:
-                pg.draw.rect(screen, st.WHITE, self.game.camera.apply_rect(road.rect), 1)
+                pg.draw.rect(screen, st.WHITE, camera.apply_rect(road.rect), 1)
+                
+            for bullet in self.game.bullets:
+                if hasattr(bullet, 'target'):
+                    if bullet.target:
+                        start = camera.apply_pos(bullet.pos)
+                        end = camera.apply_pos(bullet.target.pos)
+                        pg.draw.line(screen, st.WHITE, start, end)
                 
     
     def draw_minimap(self, screen):
@@ -262,11 +261,11 @@ class Ingame(State):
         cam_p = self.game.camera.offset * -1
         pos_x = int(cam_p.x / gm_w * map_w)
         pos_y = int(cam_p.y / gm_h * map_h)
-        w = int(st.DISPLAY_W / gm_w * map_w)
-        h = int(st.DISPLAY_H / gm_h * map_h)
-        pg.draw.rect(map_surf, (255, 255, 255), ((pos_x, pos_y), (w, h)), 1)
+        w = int(st.SCREEN_W / gm_w * map_w)
+        h = int(st.SCREEN_H / gm_h * map_h)
+        pg.draw.rect(map_surf, (255, 255, 255), ((pos_x, pos_y), (w, h)), 2)
         
-        screen.blit(map_surf, (st.DISPLAY_W - map_w - 10, 10))
+        screen.blit(map_surf, (st.SCREEN_W - map_w - 10, 10))
         
     
     
@@ -302,6 +301,78 @@ class Game_lost(State):
         super().cleanup()
         pg.mouse.set_visible(False)
         self.game.start()
+
+
+
+class Pause_menu(State):
+    def __init__(self, game):
+        super().__init__(game)
+        self.next = 'Ingame'
+        self.overlay = pg.Surface((st.TILESIZE * 8, st.TILESIZE * 10), 
+                                  pg.SRCALPHA)
+        self.overlay.fill((0, 0, 0, 100))
+        self.overlay_rect = self.overlay.get_rect()
+        self.overlay_rect.center = self.game.screen_rect.center
+        
+        self.options = ['Resume',
+                        'Options',
+                        'Go to Title']
+        self.options_pos = 0        
+        self.font = pg.font.SysFont('Arial', 40)
+        self.font_bold = pg.font.SysFont('Arial', 52, bold=True)
+    
+    
+    def startup(self):
+        pg.mouse.set_visible(True)
+        
+        
+    def update(self, dt):
+        key = self.game.key_pressed
+        if key == pg.K_ESCAPE:
+            self.next = 'Ingame'
+            self.done = True
+    
+    
+    def execute_option(self):
+        if self.options_pos == 0:
+            self.next = 'Ingame'
+            self.done = True
+        elif self.options_pos == 1:
+            pass
+            # think how I pass the next state to the optons menu...
+            #self.next = 'Options'
+            #self.done = True
+        elif self.options_pos == 2:
+            self.next = 'Start_screen'
+            self.done = True
+    
+    
+    def draw(self, screen):
+        screen.blit(self.game.bg_image, 
+                    self.game.map_rect.topleft + self.game.camera.offset)
+        self.game.draw_sprites(screen)
+        screen.blit(self.overlay, self.overlay_rect)
+        
+        # PUT THIS IN A FUNCTION/OBJECT; THIS IS ALREADY COPYPASTE
+        for i in range(len(self.options)):
+            if self.options_pos == i:
+                text_surface = self.font_bold.render(self.options[i], False, st.WHITE)
+            else:
+                text_surface = self.font.render(self.options[i], False, st.WHITE)
+            text_rect = text_surface.get_rect()
+            height = st.SCREEN_H // 18 * (i + 7)
+            text_rect.center = ((st.SCREEN_W // 2, height))
+            screen.blit(text_surface, text_rect)
+            
+            if text_rect.collidepoint(self.game.mouse_pos):
+                self.options_pos = i
+                if self.game.mouse_pressed[0]:
+                    self.execute_option()
+        
+    
+    def cleanup(self):
+        super().cleanup()
+        pg.mouse.set_visible(False)
         
         
         
@@ -318,6 +389,10 @@ class Start_screen(State):
         
         self.font = pg.font.SysFont('Arial', 40)
         self.font_bold = pg.font.SysFont('Arial', 52, bold=True)
+    
+    
+    def startup(self):
+        pg.mouse.set_visible(True)
     
     
     def update(self, dt):
@@ -351,8 +426,8 @@ class Start_screen(State):
             else:
                 text_surface = self.font.render(self.options[i], False, st.BLACK)
             text_rect = text_surface.get_rect()
-            height = st.DISPLAY_H // 18 * (i + 7)
-            text_rect.center = ((st.DISPLAY_W // 2, height))
+            height = st.SCREEN_H // 18 * (i + 7)
+            text_rect.center = ((st.SCREEN_W // 2, height))
             screen.blit(text_surface, text_rect)
             
             if text_rect.collidepoint(self.game.mouse_pos):
@@ -418,8 +493,8 @@ class Options(State):
             else:
                 text_surface = self.font.render(self.options[i], False, st.WHITE)
             text_rect = text_surface.get_rect()
-            height = st.DISPLAY_H // 18 * (i + 7)
-            text_rect.center = ((st.DISPLAY_W // 2, height))
+            height = st.SCREEN_H // 18 * (i + 7)
+            text_rect.center = ((st.SCREEN_H // 2, height))
             screen.blit(text_surface, text_rect)
             
             if text_rect.collidepoint(self.game.mouse_pos):
@@ -435,7 +510,7 @@ class Game:
         self.clock = pg.time.Clock()
         pg.mouse.set_visible(True)
         self.display = pg.display.set_mode((st.DISPLAY_W, st.DISPLAY_H))
-        self.screen = pg.Surface((st.DISPLAY_W, st.DISPLAY_H))
+        self.screen = pg.Surface((st.SCREEN_W, st.SCREEN_H))
         self.screen_rect = self.screen.get_rect()                      
         self.event_list = []
         self.font = pg.font.SysFont('Arial', 24)
@@ -445,6 +520,7 @@ class Game:
                 'Start_screen': Start_screen(self),
                 'Options': Options(self),
                 'Ingame': Ingame(self),
+                'Pause_menu': Pause_menu(self),
                 'Game_lost': Game_lost(self)
                 }
         self.state = self.states_dict['Start_screen']
@@ -468,7 +544,7 @@ class Game:
         self.money = st.STARTING_MONEY
         self.lives = st.STARTING_LIVES
         self.current_wave = 0
-        self.wave_spawner = Wave(self)
+        self.wave_spawner = mp.Wave(self)
         self.elapsed_seconds = 0
         # load objects from tmx data
         self.bg_image, map_objects = mp.load_map('level2')
@@ -517,7 +593,8 @@ class Game:
     def events(self):
         self.mouse_pressed = [0, 0, 0, 0, 0]
         self.mouse_released = [0, 0, 0, 0, 0]
-        self.mouse_pos = vec(pg.mouse.get_pos())
+        ratio = st.SCREEN_W / st.DISPLAY_W
+        self.mouse_pos = vec(pg.mouse.get_pos()) * ratio
         self.key_pressed = None
         self.event_list = pg.event.get()
         for event in self.event_list:
@@ -553,13 +630,14 @@ class Game:
     
     def draw(self):
         self.screen.fill(st.BLACK)
+        self.display.fill(st.BLACK)
         self.state.draw(self.screen)
-        w, h = self.screen.get_size()
-        if st.CAMERA_ZOOM == 1:
+        w, h = self.display.get_size()
+        if self.camera.zoom_level == 1:
             pg.transform.scale(self.screen, (w, h), self.display)
         else:
-            s = pg.transform.scale(self.screen, (int(w * st.CAMERA_ZOOM),
-                                                 int(h * st.CAMERA_ZOOM)))
+            s = pg.transform.scale(self.screen, (int(w * self.camera.zoom_level),
+                                                 int(h * self.camera.zoom_level)))
             self.display.blit(s, (0, 0))              
         pg.display.update()
     
@@ -570,11 +648,9 @@ class Game:
     
         
     def run(self):
-        #self.start()
         self.running = True
         while self.running:
             delta_time = self.clock.tick(st.FPS) / (1000.0 / st.GAME_SPEED)
-            self.elapsed_seconds += delta_time
             if delta_time <= 0.1:
                 self.events()
                 self.switch_states()

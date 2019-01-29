@@ -1,6 +1,7 @@
 import pygame as pg
 import math
 import sys
+from random import randrange
 
 import settings as st
 
@@ -55,6 +56,7 @@ def load_images():
             'title_screen': load_image('assets/title_screen.png'),
             'tower1': load_image('assets/single_images/towerDefense_tile249.png'),
             'tower2': load_image('assets/single_images/towerDefense_tile250.png'),
+            'tower3': load_image('assets/single_images/towerDefense_tile204.png'),
             'towerbase1': load_image('assets/single_images/towerDefense_tile180.png'),
             'towerbase2': load_image('assets/single_images/towerDefense_tile181.png'),
             'mob1': load_image('assets/single_images/towerDefense_tile245.png'),
@@ -66,6 +68,7 @@ def load_images():
             'mob7': load_image('assets/single_images/towerDefense_tile268.png'),
             'mob8': load_image('assets/single_images/towerDefense_tile1001.png', scale=2),
             'bullet1': load_image('assets/single_images/towerDefense_tile272.png'),
+            'rocket1': load_image('assets/single_images/towerDefense_tile251.png'),
             'flash1': load_image('assets/single_images/towerDefense_tile295.png')
             }
     
@@ -134,8 +137,6 @@ class Mob(pg.sprite.Sprite):
         
         self.rect.center = self.pos
         self.hitbox.center = self.rect.center  
-        # color
-        # MEMO: make this a health bar
         
     
     def arrive(self, target):
@@ -264,6 +265,9 @@ class Shooter(pg.sprite.Sprite):
                 Muzzle_flash(self.game, pos1, angle)
                 module_dict[self.projectile](self.game, pos2, angle, dmg)
                 Muzzle_flash(self.game, pos2, angle)                
+            elif self.type == 'anti_air':
+                module_dict[self.projectile](self.game, self.muzzle_pos, self.target, dmg)
+                Muzzle_flash(self.game, self.muzzle_pos, angle)
             else:                
                 module_dict[self.projectile](self.game, self.muzzle_pos, angle, dmg)
                 Muzzle_flash(self.game, self.muzzle_pos, angle)
@@ -282,8 +286,76 @@ class Shooter(pg.sprite.Sprite):
                     self.game.camera.apply_pos(self.base_rect.topleft))
         # draw muzzle
         screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
-    
 
+
+# ----------------- physics objects -------------------------------------------   
+
+class Physics_object(pg.sprite.Sprite):
+    def __init__(self, game, groups, position):
+        super().__init__(groups)
+        self.game = game
+        self.pos = vec(position)
+        self.acc = vec()
+        self.vel = vec()
+        self.steer = vec()
+        self.desired = vec()
+        self.target = vec()
+        self.friction = 1
+        self.maxspeed = 100
+        self.maxforce = 0.1
+        self.theta = 0
+        
+    
+    def update(self, dt):       
+        self.vel += self.acc * dt
+        self.pos += self.vel
+        # reset acceleration
+        self.acc *= 0
+        # apply friction
+        self.vel *= self.friction     
+        self.rect.topleft = self.pos    
+    
+    
+    def wander(self):
+        self.arrive(self.target)
+        
+        if self.vel.length_squared() != 0:
+            # extent vector as a multiple of the velocity
+            self.extent = self.vel.normalize() * 40
+            # radius
+            r = 30
+            # change the angle by a small random amount each frame
+            self.theta += randrange(-2, 3) / 16
+            self.target = self.pos + self.extent + vec(r * math.cos(self.theta), 
+                                                       r * math.sin(self.theta))
+    
+    
+    def arrive(self, target):
+        # get vector from self to target
+        self.desired = target - self.pos
+        d = self.desired.length()
+        self.desired = self.desired.normalize()        
+        radius = 40       
+        if d < radius:
+            m = remap(d, 0, radius, 0, self.maxspeed)
+            self.desired *= m            
+        else:
+            self.desired *= self.maxspeed       
+        # calculate steering force
+        self.steer = self.desired - self.vel
+        limit(self.steer, self.maxforce)        
+        self.acc += self.steer
+        
+    
+    def seek(self, target):
+        # get vector from self to target
+        self.desired = target - self.pos
+        self.desired = self.desired.normalize()        
+        self.desired *= self.maxspeed       
+        # calculate steering force
+        self.steer = self.desired - self.vel
+        limit(self.steer, self.maxforce)        
+        self.acc += self.steer
 
 
 
@@ -330,8 +402,53 @@ class Bullet(pg.sprite.Sprite):
     
     def draw(self, screen):
         screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
+        
 
 
+class Rocket(Physics_object):
+    def __init__(self, game, position, target, damage):
+        groups = [game.all_sprites, game.bullets]
+        super().__init__(game, groups, position)
+        self.image_original = self.game.images['rocket1'].copy()
+        self.image = self.image_original.copy()
+        self.rect = self.image.get_rect()
+        self.hitbox = pg.Rect(0, 0, 30, 30)
+        
+        self.maxspeed = 1800
+        self.friction = 0.995
+        self.maxforce = 10
+        
+        self.target = target
+        self.damage = damage
+    
+        
+    def update(self, dt):
+        self.arrive(self.target.pos)
+        super().update(dt)
+        
+        # rotate image in the direction of velocity
+        angle = self.vel.angle_to(vec(0, -1))
+        self.image = pg.transform.rotate(self.image_original, angle)
+        self.rect = self.image.get_rect()
+        
+        self.rect.center = self.pos
+        self.hitbox.center = self.rect.center
+        
+        if self.hitbox.colliderect(self.target.hitbox):
+            self.target.hp -= self.damage
+            self.kill()
+        # destroy rocket if out of bounds
+        if not self.game.map_rect.colliderect(self.rect) or self.target.hp <= 0:
+            self.kill()
+    
+    
+    def draw(self, screen):
+        screen.blit(self.image, self.game.camera.apply_pos(self.rect.topleft))
+
+
+
+
+# ---------- Particles and Effects --------------------------------------------
 
 class Muzzle_flash(pg.sprite.Sprite):
     def __init__(self, game, position, angle):
